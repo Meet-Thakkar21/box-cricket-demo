@@ -10,6 +10,7 @@ import { Footer } from './components/Footer';
 import { Home } from './pages/Home';
 import { About } from './pages/About';
 import { Booking } from './pages/Booking';
+import { Payment } from './pages/Payment';
 import { AdminLogin } from './pages/AdminLogin';
 import { AdminDashboard } from './pages/AdminDashboard';
 
@@ -31,6 +32,7 @@ function App() {
                     <Route path="/" element={<Home />} />
                     <Route path="/about" element={<About />} />
                     <Route path="/book" element={<Booking />} />
+                    <Route path="/payment" element={<Payment />} />
                   </Routes>
                 </main>
                 <Footer />

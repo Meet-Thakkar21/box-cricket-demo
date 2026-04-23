@@ -8,16 +8,18 @@ export default {
     extend: {
       colors: {
         sports: {
-          green: '#22c55e',     /* Vibrant turf green */
-          orange: '#ea580c',    /* Cricket ball orange/red */
-          yellow: '#facc15',    /* Bright yellow for highlights */
-          light: '#e2e8f0',     /* Light text */
+          green: '#15803d',     /* Deep professional green */
+          lightGreen: '#22c55e',/* Vibrant turf green for highlights */
+          orange: '#ea580c',    /* Action orange */
+          yellow: '#facc15',    /* Highlight yellow */
         },
-        dark: {
-          900: '#022c22',       /* Very dark green (night turf) */
-          800: '#064e3b',       /* Dark stadium green */
-          700: '#065f46',       /* Slightly lighter green */
-          600: '#047857',       /* Highlight dark green */
+        light: {
+          900: '#f8fafc',       /* Very light gray background */
+          800: '#ffffff',       /* White cards */
+          700: '#f1f5f9',       /* Slightly darker gray for hover/borders */
+          600: '#e2e8f0',       /* Borders */
+          text: '#0f172a',      /* Dark text */
+          muted: '#64748b',     /* Muted text */
         }
       },
       fontFamily: {

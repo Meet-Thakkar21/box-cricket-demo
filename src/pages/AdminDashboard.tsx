@@ -1,22 +1,44 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
 import { useAppContext } from '../context/AppContext';
-import { 
-  Users, 
-  IndianRupee, 
-  CalendarCheck, 
-  LogOut,
-  Search,
-  Filter
-} from 'lucide-react';
+import { Users, IndianRupee, LogOut, Save, Edit2, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { Slot } from '../types';
 
 export const AdminDashboard = () => {
-  const { isAdmin, logoutAdmin, bookings, slots } = useAppContext();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [dateFilter, setDateFilter] = useState('');
+  const { sports, addSport, isAdmin, logoutAdmin, bookings, slots, updateSlotPrice, toggleSlotAvailability, updateSlotOverride, fetchSlotsForDate, fetchData, isLoading, deleteSlot, cancelBooking } = useAppContext();
+  
+  const [editingSlotId, setEditingSlotId] = useState<string | null>(null);
+  const [editPrice, setEditPrice] = useState<number>(0);
+  const [selectedDate, setSelectedDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
+  const [selectedSportId, setSelectedSportId] = useState<string>('');
+  const [displayedSlots, setDisplayedSlots] = useState<Slot[]>([]);
+  const [newSportName, setNewSportName] = useState('');
+
+  const [confirmAction, setConfirmAction] = useState<{type: 'delete_slot' | 'cancel_booking', id: string, message: string} | null>(null);
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  useEffect(() => {
+    if (sports.length > 0 && !selectedSportId) {
+      setSelectedSportId(sports[0].id);
+    }
+  }, [sports]);
+
+  useEffect(() => {
+    const loadSlots = async () => {
+      if (!selectedSportId) return;
+      if (!selectedDate) {
+        setDisplayedSlots(slots.filter(s => s.sportId === selectedSportId));
+      } else {
+        const dateSlots = await fetchSlotsForDate(selectedDate, selectedSportId);
+        setDisplayedSlots(dateSlots);
+      }
+    };
+    loadSlots();
+  }, [selectedDate, slots, bookings, selectedSportId]);
 
   if (!isAdmin) {
     return <Navigate to="/admin" />;
@@ -25,197 +47,307 @@ export const AdminDashboard = () => {
   // Calculate stats
   const totalRevenue = bookings.reduce((sum, b) => sum + b.amount, 0);
   const totalBookings = bookings.length;
-  const activeSlots = slots.filter(s => s.isAvailable).length;
 
-  // Chart data (Bookings per day for the next 7 days based on data)
-  // Simple grouping for mock data
-  const chartData = Object.entries(
-    bookings.reduce((acc, booking) => {
-      acc[booking.date] = (acc[booking.date] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>)
-  ).map(([date, count]) => ({
-    name: format(new Date(date), 'MMM dd'),
-    bookings: count
-  })).slice(0, 7);
+  const handleAddSport = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSportName.trim()) return;
+    const success = await addSport(newSportName);
+    if (success) {
+      setNewSportName('');
+    }
+  };
 
-  // Filtered bookings
-  const filteredBookings = bookings.filter(b => {
-    const matchesSearch = b.customerName.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          b.phoneNumber.includes(searchTerm);
-    const matchesDate = dateFilter ? b.date === dateFilter : true;
-    return matchesSearch && matchesDate;
-  });
+  const handleEditSlot = (slot: Slot) => {
+    setEditingSlotId(slot.id);
+    setEditPrice(slot.price);
+  };
+
+  const handleSaveSlot = async (slotId: string) => {
+    if (selectedDate) {
+      await updateSlotOverride(selectedDate, slotId, { price: editPrice });
+      const dateSlots = await fetchSlotsForDate(selectedDate);
+      setDisplayedSlots(dateSlots);
+    } else {
+      await updateSlotPrice(slotId, editPrice);
+    }
+    setEditingSlotId(null);
+  };
+
+  const handleToggleAvailability = async (slotId: string) => {
+    const slot = displayedSlots.find(s => s.id === slotId);
+    if (!slot) return;
+
+    if (selectedDate) {
+      await updateSlotOverride(selectedDate, slotId, { isAvailable: !slot.isAvailable });
+      const dateSlots = await fetchSlotsForDate(selectedDate);
+      setDisplayedSlots(dateSlots);
+    } else {
+      await toggleSlotAvailability(slotId);
+    }
+  };
+
+  const executeConfirmAction = async () => {
+    if (!confirmAction) return;
+    
+    if (confirmAction.type === 'delete_slot') {
+      await deleteSlot(confirmAction.id);
+      setDisplayedSlots(prev => prev.filter(s => s.id !== confirmAction.id));
+    } else if (confirmAction.type === 'cancel_booking') {
+      await cancelBooking(confirmAction.id);
+    }
+    setConfirmAction(null);
+  };
+
+  const handleDeleteSlot = (slotId: string) => {
+    setConfirmAction({
+      type: 'delete_slot',
+      id: slotId,
+      message: 'Are you sure you want to delete this slot permanently? This action cannot be undone.'
+    });
+  };
+
+  const handleCancelBooking = (bookingId: string) => {
+    setConfirmAction({
+      type: 'cancel_booking',
+      id: bookingId,
+      message: 'Are you sure you want to cancel this customer booking? The slots will immediately become available.'
+    });
+  };
+
+  if (isLoading) {
+    return <div className="min-h-screen flex items-center justify-center bg-light-900">Loading admin data...</div>;
+  }
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-dark-900 relative z-10">
-      {/* Sidebar */}
-      <aside className="w-full md:w-64 glass-card rounded-none border-y-0 border-l-0 p-6 flex flex-col">
-        <div className="mb-10">
-          <h2 className="text-2xl font-display font-bold text-white">Admin Panel</h2>
-          <p className="text-neon-blue text-sm">Dashboard</p>
+    <div className="min-h-screen flex flex-col bg-light-900 relative">
+      {/* Confirmation Modal */}
+      {confirmAction && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-xl shadow-2xl p-6 max-w-md w-full animate-in zoom-in-95">
+            <h3 className="text-xl font-bold text-light-text mb-2">Confirm Action</h3>
+            <p className="text-light-muted mb-6">{confirmAction.message}</p>
+            <div className="flex gap-4 justify-end">
+              <button 
+                onClick={() => setConfirmAction(null)}
+                className="px-4 py-2 text-light-muted hover:bg-gray-100 rounded-lg transition-colors font-medium"
+              >
+                Go Back
+              </button>
+              <button 
+                onClick={executeConfirmAction}
+                className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors font-bold"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
         </div>
-        
-        <nav className="flex-1 space-y-2">
-          <a href="#" className="flex items-center space-x-3 px-4 py-3 rounded-lg bg-neon-blue/10 text-neon-blue border border-neon-blue/20">
-            <CalendarCheck className="w-5 h-5" />
-            <span>Bookings</span>
-          </a>
-          {/* Add more nav items if needed */}
-        </nav>
+      )}
 
+      {/* Header */}
+      <header className="bg-white border-b border-light-600 px-6 py-4 flex justify-between items-center sticky top-0 z-20">
+        <div>
+          <h1 className="text-2xl font-display font-bold text-light-text">Admin Dashboard</h1>
+          <p className="text-sm text-light-muted">Box Cricket Management</p>
+        </div>
         <button 
           onClick={logoutAdmin}
-          className="flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition-colors mt-auto"
+          className="flex items-center space-x-2 px-4 py-2 rounded-lg text-red-600 hover:bg-red-50 transition-colors font-medium text-sm border border-red-100"
         >
-          <LogOut className="w-5 h-5 text-red-500" />
+          <LogOut className="w-4 h-4" />
           <span>Logout</span>
         </button>
-      </aside>
+      </header>
 
       {/* Main Content */}
-      <main className="flex-1 p-6 lg:p-10 overflow-y-auto">
-        <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
-          <div>
-            <h1 className="text-3xl font-display font-bold text-white">Dashboard Overview</h1>
-            <p className="text-gray-400">Welcome back, Admin</p>
-          </div>
-        </header>
-
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-          <div className="glass-card p-6 border-l-4 border-l-neon-blue">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-gray-400 text-sm mb-1">Total Revenue</p>
-                <h3 className="text-3xl font-bold text-white">₹{totalRevenue.toLocaleString()}</h3>
-              </div>
-              <div className="p-3 rounded-lg bg-neon-blue/10">
-                <IndianRupee className="w-6 h-6 text-neon-blue" />
-              </div>
+      <main className="flex-1 p-6 lg:p-10 max-w-7xl mx-auto w-full space-y-10">
+        
+        {/* Quick Stats */}
+        <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="glass-card p-6 flex items-center justify-between border-l-4 border-l-sports-green">
+            <div>
+              <p className="text-light-muted text-sm font-bold uppercase tracking-wider mb-1">Total Revenue</p>
+              <h3 className="text-3xl font-bold text-light-text">₹{totalRevenue.toLocaleString()}</h3>
+            </div>
+            <div className="p-4 rounded-full bg-sports-green/10">
+              <IndianRupee className="w-8 h-8 text-sports-green" />
             </div>
           </div>
+          <div className="glass-card p-6 flex items-center justify-between border-l-4 border-l-sports-orange">
+            <div>
+              <p className="text-light-muted text-sm font-bold uppercase tracking-wider mb-1">Total Bookings</p>
+              <h3 className="text-3xl font-bold text-light-text">{totalBookings}</h3>
+            </div>
+            <div className="p-4 rounded-full bg-sports-orange/10">
+              <Users className="w-8 h-8 text-sports-orange" />
+            </div>
+          </div>
+        </section>
+
+        {/* Two Column Layout for Desktop */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           
-          <div className="glass-card p-6 border-l-4 border-l-neon-purple">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-gray-400 text-sm mb-1">Total Bookings</p>
-                <h3 className="text-3xl font-bold text-white">{totalBookings}</h3>
-              </div>
-              <div className="p-3 rounded-lg bg-neon-purple/10">
-                <Users className="w-6 h-6 text-neon-purple" />
-              </div>
+          {/* Add Sport Section */}
+          <section className="lg:col-span-3 glass-card p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+              <h3 className="font-bold text-lg text-light-text mb-1">Manage Sports</h3>
+              <p className="text-sm text-light-muted">Create new sports or grounds. 24-hour slots are generated automatically.</p>
             </div>
-          </div>
-
-          <div className="glass-card p-6 border-l-4 border-l-neon-green">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-gray-400 text-sm mb-1">Active Slots</p>
-                <h3 className="text-3xl font-bold text-white">{activeSlots}</h3>
-              </div>
-              <div className="p-3 rounded-lg bg-neon-green/10">
-                <CalendarCheck className="w-6 h-6 text-neon-green" />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Chart */}
-        <div className="glass-card p-6 mb-10 h-80">
-          <h3 className="text-xl font-bold text-white mb-6">Bookings Trend</h3>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData}>
-              <XAxis dataKey="name" stroke="#6b7280" />
-              <YAxis stroke="#6b7280" />
-              <Tooltip 
-                contentStyle={{ backgroundColor: '#1a1a24', border: '1px solid #00f3ff', borderRadius: '8px' }}
-                itemStyle={{ color: '#00f3ff' }}
+            <form onSubmit={handleAddSport} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+              <input 
+                type="text" 
+                value={newSportName}
+                onChange={(e) => setNewSportName(e.target.value)}
+                placeholder="e.g., Football Turf"
+                className="flex-1 sm:w-64 border border-light-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-sports-green focus:border-sports-green bg-white text-light-text"
               />
-              <Bar dataKey="bookings" fill="#00f3ff" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+              <button 
+                type="submit"
+                disabled={!newSportName.trim()}
+                className="w-full sm:w-auto bg-sports-green hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors disabled:opacity-50"
+              >
+                Add Sport
+              </button>
+            </form>
+          </section>
 
-        {/* Bookings Table */}
-        <div className="glass-card overflow-hidden">
-          <div className="p-6 border-b border-dark-700 flex flex-col sm:flex-row justify-between gap-4">
-            <h3 className="text-xl font-bold text-white">Recent Bookings</h3>
-            
-            <div className="flex gap-4">
-              <div className="relative">
-                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-                <input 
-                  type="text" 
-                  placeholder="Search name or phone..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-9 pr-4 py-2 bg-dark-900 border border-dark-700 rounded-lg text-sm text-white focus:ring-1 focus:ring-neon-blue focus:border-neon-blue"
-                />
+          {/* Slot Management */}
+          <section className="lg:col-span-1 glass-card overflow-hidden flex flex-col h-[600px]">
+            <div className="p-5 border-b border-light-600 bg-gray-50 flex flex-col gap-3">
+              <div className="flex justify-between items-center">
+                <h3 className="font-bold text-lg text-light-text">Manage Slots</h3>
+                <span className={`text-xs font-bold px-2 py-1 rounded ${selectedDate ? 'bg-sports-green/20 text-sports-green' : 'bg-gray-200 text-light-muted'}`}>
+                  {selectedDate ? 'Date Override' : 'Base Settings'}
+                </span>
               </div>
-              <div className="relative">
-                <Filter className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-                <input 
-                  type="date" 
-                  value={dateFilter}
-                  onChange={(e) => setDateFilter(e.target.value)}
-                  className="pl-9 pr-4 py-2 bg-dark-900 border border-dark-700 rounded-lg text-sm text-white focus:ring-1 focus:ring-neon-blue focus:border-neon-blue"
-                  style={{ colorScheme: 'dark' }}
-                />
+              <div className="flex flex-col sm:flex-row gap-2">
+                <select
+                  value={selectedSportId}
+                  onChange={(e) => setSelectedSportId(e.target.value)}
+                  className="w-full border border-light-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-sports-green focus:border-sports-green bg-white text-light-text font-medium"
+                >
+                  {sports.map(sport => (
+                    <option key={sport.id} value={sport.id}>{sport.name}</option>
+                  ))}
+                </select>
               </div>
+              <input 
+                type="date" 
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                min={format(new Date(), 'yyyy-MM-dd')}
+                className="w-full border border-light-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-sports-green focus:border-sports-green text-light-text bg-white"
+              />
             </div>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-gray-400">
-              <thead className="bg-dark-900/50 text-xs uppercase text-gray-400">
-                <tr>
-                  <th className="px-6 py-4 font-medium">Customer</th>
-                  <th className="px-6 py-4 font-medium">Contact</th>
-                  <th className="px-6 py-4 font-medium">Date & Slot</th>
-                  <th className="px-6 py-4 font-medium">Amount</th>
-                  <th className="px-6 py-4 font-medium">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-dark-700">
-                {filteredBookings.length > 0 ? (
-                  filteredBookings.map((booking) => {
-                    const slotInfo = slots.find(s => s.id === booking.slotId);
-                    return (
-                      <motion.tr 
-                        key={booking.id}
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        className="hover:bg-white/5 transition-colors"
+            <div className="overflow-y-auto p-4 flex-1 space-y-3">
+              {displayedSlots.map(slot => (
+                <div key={slot.id} className="border border-light-600 rounded-lg p-3 hover:border-sports-green transition-colors bg-white shadow-sm flex flex-col gap-2">
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-light-text">{slot.startTime} - {slot.endTime}</span>
+                    {slot.isBooked ? (
+                      <span className="text-xs font-bold px-2 py-1 rounded-full border bg-blue-50 text-blue-700 border-blue-200">
+                        Booked
+                      </span>
+                    ) : (
+                      <button 
+                        onClick={() => handleToggleAvailability(slot.id)}
+                        className={`text-xs font-bold px-2 py-1 rounded-full border ${slot.isAvailable ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100' : 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'}`}
                       >
-                        <td className="px-6 py-4 font-medium text-white">
-                          {booking.customerName}
-                          <div className="text-xs text-gray-500 font-normal">Players: {booking.playersCount}</div>
-                        </td>
-                        <td className="px-6 py-4">{booking.phoneNumber}</td>
-                        <td className="px-6 py-4">
-                          <div className="text-white">{format(new Date(booking.date), 'MMM dd, yyyy')}</div>
-                          <div className="text-xs text-neon-blue">{slotInfo?.startTime} - {slotInfo?.endTime}</div>
-                        </td>
-                        <td className="px-6 py-4 font-bold text-white">₹{booking.amount}</td>
-                        <td className="px-6 py-4">
-                          <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-neon-green/10 text-neon-green border border-neon-green/20">
-                            {booking.paymentStatus}
-                          </span>
-                        </td>
-                      </motion.tr>
-                    );
-                  })
-                ) : (
+                        {slot.isAvailable ? 'Active' : 'Disabled'}
+                      </button>
+                    )}
+                  </div>
+                  
+                  <div className="flex items-center justify-between mt-1">
+                    {editingSlotId === slot.id ? (
+                      <div className="flex items-center gap-2 w-full">
+                        <span className="text-gray-500 font-bold">₹</span>
+                        <input 
+                          type="number" 
+                          value={editPrice}
+                          onChange={(e) => setEditPrice(Number(e.target.value))}
+                          className="w-20 border border-light-600 rounded px-2 py-1 text-sm text-light-text bg-white focus:outline-none focus:ring-1 focus:ring-sports-green focus:border-sports-green"
+                        />
+                        <button onClick={() => handleSaveSlot(slot.id)} className="ml-auto text-sports-green hover:bg-green-50 p-1 rounded">
+                          <Save className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <span className={`font-bold text-sm ${slot.isBooked ? 'text-gray-400' : 'text-sports-green'}`}>₹{slot.price}</span>
+                        {!slot.isBooked && (
+                          <div className="flex items-center gap-3">
+                            <button onClick={() => handleEditSlot(slot)} className="text-gray-400 hover:text-sports-green" title="Edit Price">
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button onClick={() => handleDeleteSlot(slot.id)} className="text-gray-400 hover:text-red-500" title="Delete Slot">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* Bookings Table */}
+          <section className="lg:col-span-2 glass-card overflow-hidden flex flex-col h-[600px]">
+            <div className="p-5 border-b border-light-600 bg-gray-50 flex justify-between items-center">
+              <h3 className="font-bold text-lg text-light-text">Recent Bookings</h3>
+            </div>
+            <div className="overflow-auto flex-1">
+              <table className="w-full text-left text-sm text-light-text">
+                <thead className="bg-gray-50 text-xs uppercase text-light-muted sticky top-0 z-10 shadow-sm">
                   <tr>
-                    <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
-                      No bookings found
-                    </td>
+                    <th className="px-6 py-4 font-bold border-b border-light-600">Customer</th>
+                    <th className="px-6 py-4 font-bold border-b border-light-600">Date & Slots</th>
+                    <th className="px-6 py-4 font-bold border-b border-light-600 text-right">Amount</th>
+                    <th className="px-6 py-4 font-bold border-b border-light-600 text-right">Actions</th>
                   </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-light-600 bg-white">
+                  {bookings.length > 0 ? (
+                    bookings.slice().reverse().map((booking) => (
+                      <tr key={booking.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-4">
+                          <div className="font-bold text-light-text">{booking.customerName}</div>
+                          <div className="text-xs text-light-muted mt-1">{booking.phoneNumber} • {booking.playersCount} players</div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="font-medium">{format(new Date(booking.date), 'MMM dd, yyyy')}</div>
+                          <div className="text-xs text-sports-green font-bold mt-1">
+                            {sports.find(s => s.id === booking.sportId)?.name || 'Unknown Sport'} • {booking.slotIds.length} slot(s)
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="font-bold text-light-text">₹{booking.amount}</div>
+                          <div className="text-[10px] uppercase font-bold text-green-600 mt-1">{booking.paymentStatus}</div>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <button 
+                            onClick={() => handleCancelBooking(booking.id)}
+                            className="text-xs text-red-500 hover:text-red-700 font-bold px-3 py-1 border border-red-200 rounded-md bg-red-50 hover:bg-red-100 transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={4} className="px-6 py-12 text-center text-light-muted">
+                        No bookings found.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
         </div>
       </main>
     </div>
