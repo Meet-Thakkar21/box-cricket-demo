@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { QrCode, CheckCircle2, AlertCircle } from 'lucide-react';
 import { Button } from '../components/Button';
