@@ -201,7 +201,11 @@ app.delete('/api/slots/:id', (req, res) => {
   }
 });
 
-const PORT = 3001;
-app.listen(PORT, () => {
-  console.log(`Backend API running on http://localhost:${PORT}`);
-});
+if (process.env.NODE_ENV !== 'production') {
+  const PORT = process.env.PORT || 3001;
+  app.listen(PORT, () => {
+    console.log(`Backend API running on http://localhost:${PORT}`);
+  });
+}
+
+export default app;
