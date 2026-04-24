@@ -14,6 +14,9 @@ let sports = [
 let slots = [];
 
 const generateSlotsForSport = (sportId) => {
+  // Prevent duplicate slots for the same sport (crucial for serverless/HMR environments)
+  slots = slots.filter(s => s.sportId !== sportId);
+  
   for (let i = 0; i < 24; i++) {
     const id = `slot-${sportId}-${i}`;
     const startTime = `${i.toString().padStart(2, '0')}:00`;

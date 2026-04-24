@@ -220,6 +220,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (res.ok) {
         const updatedBooking = await res.json();
         setBookings(prev => prev.map(b => b.id === bookingId ? updatedBooking : b));
+        // Refresh all data to ensure consistency across the app
+        await fetchData();
       }
     } catch (e) {
       console.error(e);
