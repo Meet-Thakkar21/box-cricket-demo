@@ -45,8 +45,13 @@ export const SlotCard: React.FC<SlotCardProps> = ({ slot, isSelected, onSelect }
 
       {!isAvailable && (
         <div className="absolute inset-0 bg-white/70 backdrop-blur-[1px] rounded-xl flex items-center justify-center">
-          <span className="bg-red-500 text-white text-xs font-bold px-3 py-1.5 rounded border border-red-600 transform -rotate-12 shadow-sm">
-            BOOKED
+          <span className={cn(
+            "text-xs font-bold px-3 py-1.5 rounded border transform -rotate-12 shadow-sm",
+            slot.bookingStatus === 'pending' 
+              ? "bg-sports-orange text-white border-sports-orange" 
+              : "bg-red-500 text-white border-red-600"
+          )}>
+            {slot.bookingStatus === 'pending' ? 'UNDER REVIEW' : 'BOOKED'}
           </span>
         </div>
       )}

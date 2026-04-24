@@ -4,6 +4,7 @@ import { useAppContext } from '../context/AppContext';
 import { Users, IndianRupee, LogOut, Save, Edit2, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Slot } from '../types';
+import toast from 'react-hot-toast';
 
 export const AdminDashboard = () => {
   const { sports, addSport, isAdmin, logoutAdmin, bookings, slots, updateSlotPrice, toggleSlotAvailability, updateSlotOverride, fetchSlotsForDate, fetchData, isLoading, deleteSlot, cancelBooking, updateBookingStatus } = useAppContext();
@@ -200,8 +201,9 @@ export const AdminDashboard = () => {
                 Close
               </button>
               <button 
-                onClick={() => {
-                  updateBookingStatus(reviewingBooking.id, 'rejected');
+                onClick={async () => {
+                  await updateBookingStatus(reviewingBooking.id, 'rejected');
+                  toast.success('Booking Rejected');
                   setReviewingBooking(null);
                 }}
                 className="flex-1 px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 border border-red-200 rounded-lg transition-colors font-bold"
@@ -209,8 +211,9 @@ export const AdminDashboard = () => {
                 Reject
               </button>
               <button 
-                onClick={() => {
-                  updateBookingStatus(reviewingBooking.id, 'approved');
+                onClick={async () => {
+                  await updateBookingStatus(reviewingBooking.id, 'approved');
+                  toast.success('Booking Approved!');
                   setReviewingBooking(null);
                 }}
                 className="flex-1 px-4 py-2 bg-sports-green hover:bg-green-700 text-white rounded-lg transition-colors font-bold shadow-md"
