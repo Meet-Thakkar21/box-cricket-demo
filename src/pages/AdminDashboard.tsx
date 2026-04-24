@@ -6,7 +6,7 @@ import { format } from 'date-fns';
 import { Slot } from '../types';
 
 export const AdminDashboard = () => {
-  const { sports, addSport, isAdmin, logoutAdmin, bookings, slots, updateSlotPrice, toggleSlotAvailability, updateSlotOverride, fetchSlotsForDate, fetchData, isLoading, deleteSlot, cancelBooking } = useAppContext();
+  const { sports, addSport, isAdmin, logoutAdmin, bookings, slots, updateSlotPrice, toggleSlotAvailability, updateSlotOverride, fetchSlotsForDate, fetchData, isLoading, deleteSlot, cancelBooking, updateBookingStatus } = useAppContext();
   
   const [editingSlotId, setEditingSlotId] = useState<string | null>(null);
   const [editPrice, setEditPrice] = useState<number>(0);
@@ -14,6 +14,7 @@ export const AdminDashboard = () => {
   const [selectedSportId, setSelectedSportId] = useState<string>('');
   const [displayedSlots, setDisplayedSlots] = useState<Slot[]>([]);
   const [newSportName, setNewSportName] = useState('');
+  const [reviewingBooking, setReviewingBooking] = useState<any | null>(null);
 
   const [confirmAction, setConfirmAction] = useState<{type: 'delete_slot' | 'cancel_booking', id: string, message: string} | null>(null);
 
@@ -45,8 +46,9 @@ export const AdminDashboard = () => {
   }
 
   // Calculate stats
-  const totalRevenue = bookings.reduce((sum, b) => sum + b.amount, 0);
-  const totalBookings = bookings.length;
+  const approvedBookings = bookings.filter(b => b.status === 'approved');
+  const totalRevenue = approvedBookings.reduce((sum, b) => sum + b.amount, 0);
+  const totalBookings = approvedBookings.length;
 
   const handleAddSport = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -138,6 +140,82 @@ export const AdminDashboard = () => {
                 className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors font-bold"
               >
                 Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Booking Review Modal */}
+      {reviewingBooking && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-xl shadow-2xl p-6 max-w-md w-full animate-in zoom-in-95">
+            <h3 className="text-xl font-bold text-light-text mb-4">Review Booking Request</h3>
+            
+            <div className="space-y-3 mb-6 bg-gray-50 p-4 rounded-lg border border-gray-200 text-sm">
+              <div className="flex justify-between border-b border-gray-200 pb-2">
+                <span className="text-gray-500 font-medium">Customer Name</span>
+                <span className="font-bold text-gray-800">{reviewingBooking.customerName}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 pb-2">
+                <span className="text-gray-500 font-medium">Phone Number</span>
+                <span className="font-bold text-gray-800">{reviewingBooking.phoneNumber}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 pb-2">
+                <span className="text-gray-500 font-medium">Players Count</span>
+                <span className="font-bold text-gray-800">{reviewingBooking.playersCount || 'N/A'}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 pb-2">
+                <span className="text-gray-500 font-medium">Date & Sport</span>
+                <span className="font-bold text-gray-800">
+                  {format(new Date(reviewingBooking.date), 'MMM dd, yyyy')} • {sports.find(s => s.id === reviewingBooking.sportId)?.name}
+                </span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 pb-2">
+                <span className="text-gray-500 font-medium">Time Slots</span>
+                <span className="font-bold text-gray-800">
+                  {reviewingBooking.slotIds.map((id: string) => {
+                    const slot = slots.find(s => s.id === id);
+                    return slot ? `${slot.startTime}-${slot.endTime}` : id;
+                  }).join(', ')}
+                </span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 pb-2">
+                <span className="text-gray-500 font-medium">Amount</span>
+                <span className="font-bold text-gray-800">₹{reviewingBooking.amount}</span>
+              </div>
+              <div className="flex justify-between pt-1">
+                <span className="text-gray-500 font-medium">Payment Status</span>
+                <span className={`font-bold uppercase ${reviewingBooking.paymentStatus === 'completed' ? 'text-green-600' : 'text-red-500'}`}>
+                  {reviewingBooking.paymentStatus}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setReviewingBooking(null)}
+                className="flex-1 px-4 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors font-bold"
+              >
+                Close
+              </button>
+              <button 
+                onClick={() => {
+                  updateBookingStatus(reviewingBooking.id, 'rejected');
+                  setReviewingBooking(null);
+                }}
+                className="flex-1 px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 border border-red-200 rounded-lg transition-colors font-bold"
+              >
+                Reject
+              </button>
+              <button 
+                onClick={() => {
+                  updateBookingStatus(reviewingBooking.id, 'approved');
+                  setReviewingBooking(null);
+                }}
+                className="flex-1 px-4 py-2 bg-sports-green hover:bg-green-700 text-white rounded-lg transition-colors font-bold shadow-md"
+              >
+                Approve
               </button>
             </div>
           </div>
@@ -245,8 +323,8 @@ export const AdminDashboard = () => {
                   <div className="flex justify-between items-center">
                     <span className="font-bold text-light-text">{slot.startTime} - {slot.endTime}</span>
                     {slot.isBooked ? (
-                      <span className="text-xs font-bold px-2 py-1 rounded-full border bg-blue-50 text-blue-700 border-blue-200">
-                        Booked
+                      <span className={`text-xs font-bold px-2 py-1 rounded-full border ${slot.bookingStatus === 'pending' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
+                        {slot.bookingStatus === 'pending' ? 'Waiting for Review' : 'Booked'}
                       </span>
                     ) : (
                       <button 
@@ -314,7 +392,7 @@ export const AdminDashboard = () => {
                       <tr key={booking.id} className="hover:bg-gray-50 transition-colors">
                         <td className="px-6 py-4">
                           <div className="font-bold text-light-text">{booking.customerName}</div>
-                          <div className="text-xs text-light-muted mt-1">{booking.phoneNumber} • {booking.playersCount} players</div>
+                          <div className="text-xs text-light-muted mt-1">{booking.phoneNumber} • {booking.playersCount || 'N/A'} players</div>
                         </td>
                         <td className="px-6 py-4">
                           <div className="font-medium">{format(new Date(booking.date), 'MMM dd, yyyy')}</div>
@@ -324,15 +402,24 @@ export const AdminDashboard = () => {
                         </td>
                         <td className="px-6 py-4 text-right">
                           <div className="font-bold text-light-text">₹{booking.amount}</div>
-                          <div className="text-[10px] uppercase font-bold text-green-600 mt-1">{booking.paymentStatus}</div>
+                          <div className={`text-[10px] uppercase font-bold mt-1 ${booking.status === 'approved' ? 'text-green-600' : booking.status === 'rejected' ? 'text-red-600' : 'text-yellow-600'}`}>{booking.status}</div>
                         </td>
                         <td className="px-6 py-4 text-right">
-                          <button 
-                            onClick={() => handleCancelBooking(booking.id)}
-                            className="text-xs text-red-500 hover:text-red-700 font-bold px-3 py-1 border border-red-200 rounded-md bg-red-50 hover:bg-red-100 transition-colors"
-                          >
-                            Cancel
-                          </button>
+                          {booking.status === 'pending' ? (
+                            <button 
+                              onClick={() => setReviewingBooking(booking)}
+                              className="text-xs text-sports-green hover:text-green-800 font-bold px-3 py-1 border border-green-200 rounded-md bg-green-50 hover:bg-green-100 transition-colors shadow-sm"
+                            >
+                              Review & Approve
+                            </button>
+                          ) : (
+                            <button 
+                              onClick={() => handleCancelBooking(booking.id)}
+                              className="text-xs text-gray-500 hover:text-red-700 font-bold px-3 py-1 border border-gray-200 rounded-md bg-gray-50 hover:bg-red-100 hover:border-red-200 transition-colors"
+                            >
+                              Delete
+                            </button>
+                          )}
                         </td>
                       </tr>
                     ))

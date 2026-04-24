@@ -32,15 +32,16 @@ export const Payment = () => {
   const handlePaymentConfirm = async () => {
     setIsProcessing(true);
     try {
-      // Add 'completed' status
+      // Add 'completed' payment status and 'pending' booking status
       const finalBookingData = {
         ...bookingData,
-        paymentStatus: 'completed' as const
+        paymentStatus: 'completed' as const,
+        status: 'pending' as const
       };
 
       await addBooking(finalBookingData);
       
-      toast.success('Payment Successful! Slot Booked.', {
+      toast.success('Payment Successful! Booking requested for approval.', {
         style: {
           background: '#ffffff',
           color: '#15803d',

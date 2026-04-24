@@ -147,7 +147,7 @@ app.post('/api/bookings', (req, res) => {
   
   // Check if any slot is already booked for this date
   const isAlreadyBooked = bookings.some(
-    b => b.date === bookingData.date && b.slotIds.some(id => slotIds.includes(id))
+    b => b.date === bookingData.date && b.status !== 'rejected' && b.slotIds.some(id => slotIds.includes(id))
   );
 
   if (isAlreadyBooked) {
@@ -157,6 +157,7 @@ app.post('/api/bookings', (req, res) => {
   const newBooking = {
     ...bookingData,
     id: `b-${Date.now()}`,
+    status: 'pending',
     createdAt: new Date().toISOString(),
   };
 
@@ -177,6 +178,31 @@ app.delete('/api/bookings/:id', (req, res) => {
   bookings = bookings.filter(b => b.id !== id);
   if (bookings.length < initialLength) {
     res.json({ success: true });
+  } else {
+    res.status(404).json({ error: 'Booking not found' });
+  }
+});
+
+// Update booking status (approve/reject)
+app.put('/api/bookings/:id/status', (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body;
+  
+  if (!['approved', 'rejected', 'pending'].includes(status)) {
+    return res.status(400).json({ error: 'Invalid status' });
+  }
+
+  let updatedBooking = null;
+  bookings = bookings.map(b => {
+    if (b.id === id) {
+      updatedBooking = { ...b, status };
+      return updatedBooking;
+    }
+    return b;
+  });
+
+  if (updatedBooking) {
+    res.json(updatedBooking);
   } else {
     res.status(404).json({ error: 'Booking not found' });
   }

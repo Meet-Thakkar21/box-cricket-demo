@@ -19,7 +19,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({ isOpen, onClose, sel
   const [formData, setFormData] = useState({
     customerName: '',
     phoneNumber: '',
-    playersCount: 10,
+    playersCount: '' as string | number,
   });
 
   if (!isOpen || selectedSlots.length === 0) return null;
@@ -36,7 +36,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({ isOpen, onClose, sel
       slotIds: selectedSlots.map(s => s.id),
       customerName: formData.customerName,
       phoneNumber: formData.phoneNumber,
-      playersCount: Number(formData.playersCount),
+      playersCount: formData.playersCount ? Number(formData.playersCount) : undefined,
       amount: totalAmount,
     };
 
@@ -142,12 +142,12 @@ export const BookingModal: React.FC<BookingModalProps> = ({ isOpen, onClose, sel
                   <input
                     type="number"
                     name="playersCount"
-                    required
                     min="2"
                     max="30"
                     value={formData.playersCount}
                     onChange={handleChange}
                     className="block w-full pl-10 bg-white border border-light-600 rounded-lg py-2.5 text-light-text placeholder-gray-400 focus:ring-1 focus:ring-sports-green focus:border-sports-green transition-colors"
+                    placeholder="Optional"
                   />
                 </div>
               </div>

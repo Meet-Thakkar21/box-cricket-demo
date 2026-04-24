@@ -11,6 +11,7 @@ export interface Slot {
   price: number;
   isAvailable: boolean;
   isBooked?: boolean;
+  bookingStatus?: 'pending' | 'approved' | 'rejected';
 }
 
 export interface Booking {
@@ -20,8 +21,9 @@ export interface Booking {
   slotIds: string[]; // Changed from slotId to support multiple slots
   customerName: string;
   phoneNumber: string;
-  playersCount: number;
+  playersCount?: number;
   paymentStatus: 'pending' | 'completed' | 'failed';
+  status: 'pending' | 'approved' | 'rejected';
   amount: number;
   createdAt: string;
 }

@@ -14,6 +14,7 @@ interface AppContextType {
   updateSlotOverride: (date: string, slotId: string, updates: { price?: number, isAvailable?: boolean }) => Promise<void>;
   deleteSlot: (slotId: string) => Promise<void>;
   cancelBooking: (bookingId: string) => Promise<void>;
+  updateBookingStatus: (bookingId: string, status: 'approved' | 'rejected') => Promise<void>;
   isAdmin: boolean;
   loginAdmin: () => void;
   logoutAdmin: () => void;
@@ -104,10 +105,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const res = await fetch(`/api/slots${query}`);
       const dateSlots: Slot[] = await res.json();
       return dateSlots.map(slot => {
-        const isBooked = bookings.some(b => b.date === date && b.slotIds.includes(slot.id));
+        const booking = bookings.find(b => b.date === date && b.status !== 'rejected' && b.slotIds.includes(slot.id));
+        const isBooked = !!booking;
         return {
           ...slot,
           isBooked,
+          bookingStatus: booking?.status,
           isAvailable: slot.isAvailable && !isBooked
         };
       });
@@ -123,10 +126,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       targetSlots = targetSlots.filter(s => s.sportId === sportId);
     }
     return targetSlots.map(slot => {
-      const isBooked = bookings.some(b => b.date === date && b.slotIds.includes(slot.id));
+      const booking = bookings.find(b => b.date === date && b.status !== 'rejected' && b.slotIds.includes(slot.id));
+      const isBooked = !!booking;
       return {
         ...slot,
         isBooked,
+        bookingStatus: booking?.status,
         isAvailable: slot.isAvailable && !isBooked
       };
     });
@@ -205,6 +210,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const updateBookingStatus = async (bookingId: string, status: 'approved' | 'rejected') => {
+    try {
+      const res = await fetch(`/api/bookings/${bookingId}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+      if (res.ok) {
+        const updatedBooking = await res.json();
+        setBookings(prev => prev.map(b => b.id === bookingId ? updatedBooking : b));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const loginAdmin = () => {
     setIsAdmin(true);
     localStorage.setItem('isAdmin', 'true');
@@ -229,6 +250,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updateSlotOverride,
       deleteSlot,
       cancelBooking,
+      updateBookingStatus,
       isAdmin,
       loginAdmin,
       logoutAdmin,
